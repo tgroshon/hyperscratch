@@ -70,9 +70,11 @@ defmodule HyperchatsWeb.Router do
       live "/users/settings/confirm_email/:token", UserSettingsLive, :confirm_email
 
       # Chats
-      live "/chats", ChatLive.Index, :index
-      live "/chats/new", ChatLive.Index, :new
-      live "/chats/:id/edit", ChatLive.Index, :edit
+      # live "/chats", ChatLive.Index, :index
+      # live "/chats/new", ChatLive.Index, :new
+      # live "/chats/:id/edit", ChatLive.Index, :edit
+      live "/chats", ChatLive.Chat, :index
+      live "/chats/new", ChatLive.Chat, :new
 
       live "/chats/:id", ChatLive.Show, :show
       live "/chats/:id/show/edit", ChatLive.Show, :edit
