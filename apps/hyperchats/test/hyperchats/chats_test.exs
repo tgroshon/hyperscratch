@@ -4,7 +4,7 @@ defmodule Hyperchats.ChatsTest do
   alias Hyperchats.Chats
 
   describe "chats" do
-    alias Hyperchats.Chats.Chat
+    alias Hyperchats.Chats.Message
 
     import Hyperchats.ChatsFixtures
 

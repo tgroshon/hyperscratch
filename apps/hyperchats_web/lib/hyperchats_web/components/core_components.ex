@@ -47,12 +47,7 @@ defmodule HyperchatsWeb.CoreComponents do
 
   def modal(assigns) do
     ~H"""
-    <div
-      id={@id}
-      phx-mounted={@show && show_modal(@id)}
-      phx-remove={hide_modal(@id)}
-      class="relative z-50 hidden"
-    >
+    <div id={@id} phx-mounted={@show && show_modal(@id)} class="relative z-50 hidden">
       <div id={"#{@id}-bg"} class="fixed inset-0 bg-zinc-50/90 transition-opacity" aria-hidden="true" />
       <div
         class="fixed inset-0 overflow-y-auto"
@@ -87,11 +82,7 @@ defmodule HyperchatsWeb.CoreComponents do
                   <h1 id={"#{@id}-title"} class="text-lg font-semibold leading-8 text-zinc-800">
                     <%= render_slot(@title) %>
                   </h1>
-                  <p
-                    :if={@subtitle != []}
-                    id={"#{@id}-description"}
-                    class="mt-2 text-sm leading-6 text-zinc-600"
-                  >
+                  <p :if={@subtitle != []} class="mt-2 text-sm leading-6 text-zinc-600">
                     <%= render_slot(@subtitle) %>
                   </p>
                 </header>
@@ -147,7 +138,7 @@ defmodule HyperchatsWeb.CoreComponents do
       :if={msg = render_slot(@inner_block) || Phoenix.Flash.get(@flash, @kind)}
       id={@id}
       phx-mounted={@autoshow && show("##{@id}")}
-      phx-click={JS.push("lv:clear-flash", value: %{key: @kind}) |> hide("##{@id}")}
+      phx-click={JS.push("lv:clear-flash", value: %{key: @kind}) |> hide("#flash")}
       role="alert"
       class={[
         "fixed hidden top-2 right-2 w-80 sm:w-96 z-50 rounded-lg p-3 shadow-md shadow-zinc-900/5 ring-1",
@@ -206,15 +197,15 @@ defmodule HyperchatsWeb.CoreComponents do
 
   ## Examples
 
-      <.simple_form for={@form} phx-change="validate" phx-submit="save">
-        <.input field={@form[:email]} label="Email"/>
-        <.input field={@form[:username]} label="Username" />
+      <.simple_form :let={f} for={:user} phx-change="validate" phx-submit="save">
+        <.input field={{f, :email}} label="Email"/>
+        <.input field={{f, :username}} label="Username" />
         <:actions>
           <.button>Save</.button>
         </:actions>
       </.simple_form>
   """
-  attr :for, :any, required: true, doc: "the datastructure for the form"
+  attr :for, :any, default: nil, doc: "the datastructure for the form"
   attr :as, :any, default: nil, doc: "the server side parameter to collect all input under"
 
   attr :rest, :global,
@@ -276,61 +267,59 @@ defmodule HyperchatsWeb.CoreComponents do
 
   ## Examples
 
-      <.input field={@form[:email]} type="email" />
+      <.input field={{f, :email}} type="email" />
       <.input name="my-input" errors={["oh no!"]} />
   """
-  attr :id, :any, default: nil
+  attr :id, :any
   attr :name, :any
   attr :label, :string, default: nil
-  attr :value, :any
 
   attr :type, :string,
     default: "text",
     values: ~w(checkbox color date datetime-local email file hidden month number password
                range radio search select tel text textarea time url week)
 
-  attr :field, Phoenix.HTML.FormField,
-    doc: "a form field struct retrieved from the form, for example: @form[:email]"
-
-  attr :errors, :list, default: []
+  attr :value, :any
+  attr :field, :any, doc: "a %Phoenix.HTML.Form{}/field name tuple, for example: {f, :email}"
+  attr :errors, :list
   attr :checked, :boolean, doc: "the checked flag for checkbox inputs"
   attr :prompt, :string, default: nil, doc: "the prompt for select inputs"
   attr :options, :list, doc: "the options to pass to Phoenix.HTML.Form.options_for_select/2"
   attr :multiple, :boolean, default: false, doc: "the multiple flag for select inputs"
-  attr :rest, :global, include: ~w(autocomplete cols disabled form max maxlength min minlength
-                                   pattern placeholder readonly required rows size step)
+  attr :rest, :global, include: ~w(autocomplete disabled form max maxlength min minlength
+                                   pattern placeholder readonly required size step)
   slot :inner_block
 
-  def input(%{field: %Phoenix.HTML.FormField{} = field} = assigns) do
+  def input(%{field: {f, field}} = assigns) do
     assigns
-    |> assign(field: nil, id: assigns.id || field.id)
-    |> assign(:errors, Enum.map(field.errors, &translate_error(&1)))
-    |> assign_new(:name, fn -> if assigns.multiple, do: field.name <> "[]", else: field.name end)
-    |> assign_new(:value, fn -> field.value end)
+    |> assign(field: nil)
+    |> assign_new(:name, fn ->
+      name = Phoenix.HTML.Form.input_name(f, field)
+      if assigns.multiple, do: name <> "[]", else: name
+    end)
+    |> assign_new(:id, fn -> Phoenix.HTML.Form.input_id(f, field) end)
+    |> assign_new(:value, fn -> Phoenix.HTML.Form.input_value(f, field) end)
+    |> assign_new(:errors, fn -> translate_errors(f.errors || [], field) end)
     |> input()
   end
 
-  def input(%{type: "checkbox", value: value} = assigns) do
-    assigns =
-      assign_new(assigns, :checked, fn -> Phoenix.HTML.Form.normalize_value("checkbox", value) end)
+  def input(%{type: "checkbox"} = assigns) do
+    assigns = assign_new(assigns, :checked, fn -> input_equals?(assigns.value, "true") end)
 
     ~H"""
-    <div phx-feedback-for={@name}>
-      <label class="flex items-center gap-4 text-sm leading-6 text-zinc-600">
-        <input type="hidden" name={@name} value="false" />
-        <input
-          type="checkbox"
-          id={@id || @name}
-          name={@name}
-          value="true"
-          checked={@checked}
-          class="rounded border-zinc-300 text-zinc-900 focus:ring-zinc-900"
-          {@rest}
-        />
-        <%= @label %>
-      </label>
-      <.error :for={msg <- @errors}><%= msg %></.error>
-    </div>
+    <label phx-feedback-for={@name} class="flex items-center gap-4 text-sm leading-6 text-zinc-600">
+      <input type="hidden" name={@name} value="false" />
+      <input
+        type="checkbox"
+        id={@id || @name}
+        name={@name}
+        value="true"
+        checked={@checked}
+        class="rounded border-zinc-300 text-zinc-900 focus:ring-zinc-900"
+        {@rest}
+      />
+      <%= @label %>
+    </label>
     """
   end
 
@@ -345,7 +334,7 @@ defmodule HyperchatsWeb.CoreComponents do
         multiple={@multiple}
         {@rest}
       >
-        <option :if={@prompt} value=""><%= @prompt %></option>
+        <option :if={@prompt}><%= @prompt %></option>
         <%= Phoenix.HTML.Form.options_for_select(@options, @value) %>
       </select>
       <.error :for={msg <- @errors}><%= msg %></.error>
@@ -361,14 +350,15 @@ defmodule HyperchatsWeb.CoreComponents do
         id={@id || @name}
         name={@name}
         class={[
+          input_border(@errors),
           "mt-2 block min-h-[6rem] w-full rounded-lg border-zinc-300 py-[7px] px-[11px]",
           "text-zinc-900 focus:border-zinc-400 focus:outline-none focus:ring-4 focus:ring-zinc-800/5 sm:text-sm sm:leading-6",
-          "phx-no-feedback:border-zinc-300 phx-no-feedback:focus:border-zinc-400 phx-no-feedback:focus:ring-zinc-800/5",
-          "border-zinc-300 focus:border-zinc-400 focus:ring-zinc-800/5",
-          @errors != [] && "border-rose-400 focus:border-rose-400 focus:ring-rose-400/10"
+          "phx-no-feedback:border-zinc-300 phx-no-feedback:focus:border-zinc-400 phx-no-feedback:focus:ring-zinc-800/5"
         ]}
         {@rest}
-      ><%= Phoenix.HTML.Form.normalize_value("textarea", @value) %></textarea>
+      >
+
+    <%= @value %></textarea>
       <.error :for={msg <- @errors}><%= msg %></.error>
     </div>
     """
@@ -382,13 +372,12 @@ defmodule HyperchatsWeb.CoreComponents do
         type={@type}
         name={@name}
         id={@id || @name}
-        value={Phoenix.HTML.Form.normalize_value(@type, @value)}
+        value={@value}
         class={[
+          input_border(@errors),
           "mt-2 block w-full rounded-lg border-zinc-300 py-[7px] px-[11px]",
           "text-zinc-900 focus:outline-none focus:ring-4 sm:text-sm sm:leading-6",
-          "phx-no-feedback:border-zinc-300 phx-no-feedback:focus:border-zinc-400 phx-no-feedback:focus:ring-zinc-800/5",
-          "border-zinc-300 focus:border-zinc-400 focus:ring-zinc-800/5",
-          @errors != [] && "border-rose-400 focus:border-rose-400 focus:ring-rose-400/10"
+          "phx-no-feedback:border-zinc-300 phx-no-feedback:focus:border-zinc-400 phx-no-feedback:focus:ring-zinc-800/5"
         ]}
         {@rest}
       />
@@ -396,6 +385,12 @@ defmodule HyperchatsWeb.CoreComponents do
     </div>
     """
   end
+
+  defp input_border([] = _errors),
+    do: "border-zinc-300 focus:border-zinc-400 focus:ring-zinc-800/5"
+
+  defp input_border([_ | _] = _errors),
+    do: "border-rose-400 focus:border-rose-400 focus:ring-rose-400/10"
 
   @doc """
   Renders a label.
@@ -461,13 +456,8 @@ defmodule HyperchatsWeb.CoreComponents do
       </.table>
   """
   attr :id, :string, required: true
+  attr :row_click, :any, default: nil
   attr :rows, :list, required: true
-  attr :row_id, :any, default: nil, doc: "the function for generating the row id"
-  attr :row_click, :any, default: nil, doc: "the function for handling phx-click on each row"
-
-  attr :row_item, :any,
-    default: &Function.identity/1,
-    doc: "the function for mapping each row before calling the :col and :action slots"
 
   slot :col, required: true do
     attr :label, :string
@@ -476,13 +466,8 @@ defmodule HyperchatsWeb.CoreComponents do
   slot :action, doc: "the slot for showing user actions in the last table column"
 
   def table(assigns) do
-    assigns =
-      with %{rows: %Phoenix.LiveView.LiveStream{}} <- assigns do
-        assign(assigns, row_id: assigns.row_id || fn {id, _item} -> id end)
-      end
-
     ~H"""
-    <div class="overflow-y-auto px-4 sm:overflow-visible sm:px-0">
+    <div id={@id} class="overflow-y-auto px-4 sm:overflow-visible sm:px-0">
       <table class="mt-11 w-[40rem] sm:w-full">
         <thead class="text-left text-[0.8125rem] leading-6 text-zinc-500">
           <tr>
@@ -490,32 +475,34 @@ defmodule HyperchatsWeb.CoreComponents do
             <th class="relative p-0 pb-4"><span class="sr-only"><%= gettext("Actions") %></span></th>
           </tr>
         </thead>
-        <tbody
-          id={@id}
-          phx-update={match?(%Phoenix.LiveView.LiveStream{}, @rows) && "stream"}
-          class="relative divide-y divide-zinc-100 border-t border-zinc-200 text-sm leading-6 text-zinc-700"
-        >
-          <tr :for={row <- @rows} id={@row_id && @row_id.(row)} class="group hover:bg-zinc-50">
+        <tbody class="relative divide-y divide-zinc-100 border-t border-zinc-200 text-sm leading-6 text-zinc-700">
+          <tr
+            :for={row <- @rows}
+            id={"#{@id}-#{Phoenix.Param.to_param(row)}"}
+            class="relative group hover:bg-zinc-50"
+          >
             <td
               :for={{col, i} <- Enum.with_index(@col)}
               phx-click={@row_click && @row_click.(row)}
-              class={["relative p-0", @row_click && "hover:cursor-pointer"]}
+              class={["p-0", @row_click && "hover:cursor-pointer"]}
             >
+              <div :if={i == 0}>
+                <span class="absolute h-full w-4 top-0 -left-4 group-hover:bg-zinc-50 sm:rounded-l-xl" />
+                <span class="absolute h-full w-4 top-0 -right-4 group-hover:bg-zinc-50 sm:rounded-r-xl" />
+              </div>
               <div class="block py-4 pr-6">
-                <span class="absolute -inset-y-px right-0 -left-4 group-hover:bg-zinc-50 sm:rounded-l-xl" />
                 <span class={["relative", i == 0 && "font-semibold text-zinc-900"]}>
-                  <%= render_slot(col, @row_item.(row)) %>
+                  <%= render_slot(col, row) %>
                 </span>
               </div>
             </td>
-            <td :if={@action != []} class="relative p-0 w-14">
+            <td :if={@action != []} class="p-0 w-14">
               <div class="relative whitespace-nowrap py-4 text-right text-sm font-medium">
-                <span class="absolute -inset-y-px -right-4 left-0 group-hover:bg-zinc-50 sm:rounded-r-xl" />
                 <span
                   :for={action <- @action}
                   class="relative ml-4 font-semibold leading-6 text-zinc-900 hover:text-zinc-700"
                 >
-                  <%= render_slot(action, @row_item.(row)) %>
+                  <%= render_slot(action, row) %>
                 </span>
               </div>
             </td>
@@ -608,7 +595,6 @@ defmodule HyperchatsWeb.CoreComponents do
       transition: {"transition-all transform ease-out duration-300", "opacity-0", "opacity-100"}
     )
     |> show("##{id}-container")
-    |> JS.add_class("overflow-hidden", to: "body")
     |> JS.focus_first(to: "##{id}-content")
   end
 
@@ -620,7 +606,6 @@ defmodule HyperchatsWeb.CoreComponents do
     )
     |> hide("##{id}-container")
     |> JS.hide(to: "##{id}", transition: {"block", "block", "hidden"})
-    |> JS.remove_class("overflow-hidden", to: "body")
     |> JS.pop_focus()
   end
 
@@ -646,9 +631,9 @@ defmodule HyperchatsWeb.CoreComponents do
     # should be written to the errors.po file. The :count option is
     # set by Ecto and indicates we should also apply plural rules.
     if count = opts[:count] do
-      Gettext.dngettext(HyperchatsWeb.Gettext, "errors", msg, msg, count, opts)
+      Gettext.dngettext(StreamChatWeb.Gettext, "errors", msg, msg, count, opts)
     else
-      Gettext.dgettext(HyperchatsWeb.Gettext, "errors", msg, opts)
+      Gettext.dgettext(StreamChatWeb.Gettext, "errors", msg, opts)
     end
   end
 
@@ -657,5 +642,66 @@ defmodule HyperchatsWeb.CoreComponents do
   """
   def translate_errors(errors, field) when is_list(errors) do
     for {^field, {msg, opts}} <- errors, do: translate_error({msg, opts})
+  end
+
+  defp input_equals?(val1, val2) do
+    Phoenix.HTML.html_escape(val1) == Phoenix.HTML.html_escape(val2)
+  end
+
+  def user_icon(assigns) do
+    ~H"""
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke-width="1.5"
+      stroke="currentColor"
+      class="w-8 h-8"
+    >
+      <path
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        d="M17.982 18.725A7.488 7.488 0 0012 15.75a7.488 7.488 0 00-5.982 2.975m11.963 0a9 9 0 10-11.963 0m11.963 0A8.966 8.966 0 0112 21a8.966 8.966 0 01-5.982-2.275M15 9.75a3 3 0 11-6 0 3 3 0 016 0z"
+      />
+    </svg>
+    """
+  end
+
+  def chat_icon(assigns) do
+    ~H"""
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke-width="1.5"
+      stroke="currentColor"
+      class="w-6 h-6"
+    >
+      <path
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        d="M20.25 8.511c.884.284 1.5 1.128 1.5 2.097v4.286c0 1.136-.847 2.1-1.98 2.193-.34.027-.68.052-1.02.072v3.091l-3-3c-1.354 0-2.694-.055-4.02-.163a2.115 2.115 0 01-.825-.242m9.345-8.334a2.126 2.126 0 00-.476-.095 48.64 48.64 0 00-8.048 0c-1.131.094-1.976 1.057-1.976 2.192v4.286c0 .837.46 1.58 1.155 1.951m9.345-8.334V6.637c0-1.621-1.152-3.026-2.76-3.235A48.455 48.455 0 0011.25 3c-2.115 0-4.198.137-6.24.402-1.608.209-2.76 1.614-2.76 3.235v6.226c0 1.621 1.152 3.026 2.76 3.235.577.075 1.157.14 1.74.194V21l4.155-4.155"
+      />
+    </svg>
+    """
+  end
+
+  def delete_icon(assigns) do
+    ~H"""
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke-width="1.5"
+      stroke="red"
+      class="w-6 h-6 float-right pl-1 mt-1"
+      id={@id}
+      style="display:none"
+      phx-click={@phx_click}
+      phx-value-item_id={@value}
+    >
+      <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+    </svg>
+    """
   end
 end

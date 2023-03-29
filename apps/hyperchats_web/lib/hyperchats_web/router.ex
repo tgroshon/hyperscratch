@@ -68,16 +68,13 @@ defmodule HyperchatsWeb.Router do
       on_mount: [{HyperchatsWeb.UserAuth, :ensure_authenticated}] do
       live "/users/settings", UserSettingsLive, :edit
       live "/users/settings/confirm_email/:token", UserSettingsLive, :confirm_email
+    end
 
-      # Chats
-      # live "/chats", ChatLive.Index, :index
-      # live "/chats/new", ChatLive.Index, :new
-      # live "/chats/:id/edit", ChatLive.Index, :edit
-      live "/chats", ChatLive.Chat, :index
-      live "/chats/new", ChatLive.Chat, :new
-
-      live "/chats/:id", ChatLive.Show, :show
-      live "/chats/:id/show/edit", ChatLive.Show, :edit
+    live_session :rooms,
+      on_mount: [{HyperchatsWeb.UserAuth, :ensure_authenticated}],
+      layout: {HyperchatsWeb.Layouts, :rooms} do
+      live "/rooms", ChatLive.Root, :index
+      live "/rooms/:id", ChatLive.Root, :show
     end
   end
 

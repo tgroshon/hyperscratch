@@ -6,99 +6,165 @@ defmodule Hyperchats.Chats do
   import Ecto.Query, warn: false
   alias Hyperchats.Repo
 
-  alias Hyperchats.Chats.Chat
+  alias Hyperchats.Chats.{Room, Message}
+  alias Hyperchats.Chats.Message
+  alias HyperchatsWeb.Endpoint
 
   @doc """
-  Returns the list of chats.
+  Returns the list of rooms.
 
   ## Examples
 
-      iex> list_chats()
-      [%Chat{}, ...]
+      iex> list_rooms()
+      [%Room{}, ...]
 
   """
-  def list_chats do
-    Repo.all(Chat)
+  def list_rooms do
+    Repo.all(Room)
   end
 
   @doc """
-  Gets a single chat.
+  Gets a single room.
 
-  Raises `Ecto.NoResultsError` if the Chat does not exist.
+  Raises `Ecto.NoResultsError` if the Room does not exist.
 
   ## Examples
 
-      iex> get_chat!(123)
-      %Chat{}
+      iex> get_room!(123)
+      %Room{}
 
-      iex> get_chat!(456)
+      iex> get_room!(456)
       ** (Ecto.NoResultsError)
 
   """
-  def get_chat!(id), do: Repo.get!(Chat, id)
+  def get_room!(id) do
+    Repo.get(Room, id)
+  end
+
+  def get_message!(id) do
+    Repo.get(Message, id)
+  end
+
+  def last_ten_messages_for(room_id) do
+    Message.Query.for_room(room_id)
+    |> Repo.all()
+    |> Repo.preload(:sender)
+  end
+
+  def last_user_message_for_room(room_id, user_id) do
+    Message.Query.last_user_message_for_room(room_id, user_id)
+    |> Repo.one()
+  end
 
   @doc """
-  Creates a chat.
+  Creates a room.
 
   ## Examples
 
-      iex> create_chat(%{field: value})
-      {:ok, %Chat{}}
+      iex> create_room(%{field: value})
+      {:ok, %Room{}}
 
-      iex> create_chat(%{field: bad_value})
+      iex> create_room(%{field: bad_value})
       {:error, %Ecto.Changeset{}}
 
   """
-  def create_chat(attrs \\ %{}) do
-    %Chat{}
-    |> Chat.changeset(attrs)
+  def create_room(attrs \\ %{}) do
+    %Room{}
+    |> Room.changeset(attrs)
     |> Repo.insert()
   end
 
   @doc """
-  Updates a chat.
+  Updates a room.
 
   ## Examples
 
-      iex> update_chat(chat, %{field: new_value})
-      {:ok, %Chat{}}
+      iex> update_room(room, %{field: new_value})
+      {:ok, %Room{}}
 
-      iex> update_chat(chat, %{field: bad_value})
+      iex> update_room(room, %{field: bad_value})
       {:error, %Ecto.Changeset{}}
 
   """
-  def update_chat(%Chat{} = chat, attrs) do
-    chat
-    |> Chat.changeset(attrs)
+  def update_room(%Room{} = room, attrs) do
+    room
+    |> Room.changeset(attrs)
     |> Repo.update()
   end
 
   @doc """
-  Deletes a chat.
+  Deletes a room.
 
   ## Examples
 
-      iex> delete_chat(chat)
-      {:ok, %Chat{}}
+      iex> delete_room(room)
+      {:ok, %Room{}}
 
-      iex> delete_chat(chat)
+      iex> delete_room(room)
       {:error, %Ecto.Changeset{}}
 
   """
-  def delete_chat(%Chat{} = chat) do
-    Repo.delete(chat)
+  def delete_room(%Room{} = room) do
+    Repo.delete(room)
+  end
+
+  def delete_message(%Message{} = message) do
+    Repo.delete(message)
   end
 
   @doc """
-  Returns an `%Ecto.Changeset{}` for tracking chat changes.
+  Returns an `%Ecto.Changeset{}` for tracking room changes.
 
   ## Examples
 
-      iex> change_chat(chat)
-      %Ecto.Changeset{data: %Chat{}}
+      iex> change_room(room)
+      %Ecto.Changeset{data: %Room{}}
 
   """
-  def change_chat(%Chat{} = chat, attrs \\ %{}) do
-    Chat.changeset(chat, attrs)
+  def change_room(%Room{} = room, attrs \\ %{}) do
+    Room.changeset(room, attrs)
+  end
+
+  def change_message(%Message{} = message, attrs \\ %{}) do
+    Message.changeset(message, attrs)
+  end
+
+  def create_message(attrs \\ %{}) do
+    %Message{}
+    |> Message.changeset(attrs)
+    |> Repo.insert()
+    |> publish_message_created()
+  end
+
+  def update_message(%Message{} = message, attrs) do
+    message
+    |> Message.changeset(attrs)
+    |> Repo.update()
+    |> publish_message_updated()
+  end
+
+  def preload_message_sender(message) do
+    message
+    |> Repo.preload(:sender)
+  end
+
+  def publish_message_created({:ok, message} = result) do
+    Endpoint.broadcast("room:#{message.room_id}", "new_message", %{message: message})
+    result
+  end
+
+  def publish_message_created(result), do: result
+
+  def publish_message_updated({:ok, message} = result) do
+    Endpoint.broadcast("room:#{message.room_id}", "updated_message", %{message: message})
+    result
+  end
+
+  def publish_message_updated(result), do: result
+
+  def get_previous_n_messages(id, n) do
+    Message.Query.previous_n(id, n)
+    |> Repo.all()
+    |> Repo.preload(:sender)
   end
 end
