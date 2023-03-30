@@ -8,7 +8,6 @@ defmodule Hyperchats.Chats do
 
   alias Hyperchats.Chats.{Room, Message}
   alias Hyperchats.Chats.Message
-  alias HyperchatsWeb.Endpoint
 
   @doc """
   Returns the list of rooms.
@@ -133,34 +132,18 @@ defmodule Hyperchats.Chats do
     %Message{}
     |> Message.changeset(attrs)
     |> Repo.insert()
-    |> publish_message_created()
   end
 
   def update_message(%Message{} = message, attrs) do
     message
     |> Message.changeset(attrs)
     |> Repo.update()
-    |> publish_message_updated()
   end
 
   def preload_message_sender(message) do
     message
     |> Repo.preload(:sender)
   end
-
-  def publish_message_created({:ok, message} = result) do
-    Endpoint.broadcast("room:#{message.room_id}", "new_message", %{message: message})
-    result
-  end
-
-  def publish_message_created(result), do: result
-
-  def publish_message_updated({:ok, message} = result) do
-    Endpoint.broadcast("room:#{message.room_id}", "updated_message", %{message: message})
-    result
-  end
-
-  def publish_message_updated(result), do: result
 
   def get_previous_n_messages(id, n) do
     Message.Query.previous_n(id, n)
